@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import axios from "axios";
+import { useEffect, useState, useCallback } from "react";
+import axios, { AxiosError } from "axios";
 import { Plus, Search } from "lucide-react";
 
-// Define the data interfaces for type safety
 interface Transaction {
   id: number;
   date: string;
@@ -23,25 +22,25 @@ interface Category {
   type: "IN" | "EX";
 }
 
+interface TransactionPayload {
+  description: string;
+  amount: number;
+  type: string;
+  is_recurring: boolean;
+  date: string;
+  category?: number;
+}
+
 export default function Transactions() {
-  // State for all transactions and categories fetched from the API
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // State for filtering and searching
+  const [error, setError] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<"All" | "income" | "expense">("All");
   const [filterCategory, setFilterCategory] = useState<string>("All");
   const [searchTerm, setSearchTerm] = useState("");
-
-  // State for error handling
-  const [error, setError] = useState<string | null>(null);
-
-  // State for the modal (Add/Edit Transaction form)
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
-
-  // State for the form data
   const [formData, setFormData] = useState({
     description: "",
     amount: "",
@@ -51,7 +50,6 @@ export default function Transactions() {
     date: new Date().toISOString().substring(0, 10),
   });
 
-  // Calculate totals for the summary cards
   const totalIncome = transactions
     .filter((t) => t.type === "income")
     .reduce((sum, t) => sum + t.amount, 0);
@@ -60,19 +58,47 @@ export default function Transactions() {
     .reduce((sum, t) => sum + t.amount, 0);
   const netIncome = totalIncome - totalExpenses;
 
-  // Function to fetch all data and populate state
-  const fetchData = async () => {
+  const refreshToken = useCallback(async (): Promise<string | null> => {
+    const refreshToken = localStorage.getItem("refreshToken");
+    if (!refreshToken) {
+      setError("No refresh token available. Please log in again.");
+      return null;
+    }
+
+    try {
+      const response = await axios.post("https://beimnettadesse.pythonanywhere.com/api/accounts/token/refresh/", {
+        refresh: refreshToken,
+      });
+      const newAccessToken = response.data.access;
+      localStorage.setItem("accessToken", newAccessToken);
+      console.log("Token refreshed successfully");
+      return newAccessToken;
+    } catch (err) {
+      const error = err as AxiosError<{ detail?: string; message?: string }>;
+      console.error("Token refresh failed:", {
+        message: error.response?.data?.detail || error.message,
+        status: error.response?.status,
+      });
+      setError("Session expired. Please log in again.");
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
+      return null;
+    }
+  }, []);
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     const token = localStorage.getItem("accessToken");
     if (!token) {
       setError("You must be logged in to view transactions.");
       setTransactions([]);
+      setCategories([]);
       setLoading(false);
       return;
     }
+
     try {
-      // Use Promise.all to fetch both transactions and categories concurrently
       const [transactionsRes, categoriesRes] = await Promise.all([
         axios.get("https://beimnettadesse.pythonanywhere.com/api/core/transactions/", {
           headers: { Authorization: `Bearer ${token}` },
@@ -85,7 +111,6 @@ export default function Transactions() {
       const categoriesData = categoriesRes.data;
       const transactionsData = transactionsRes.data;
 
-      // Map category names to transactions after both requests are complete
       const transactionsWithNames = transactionsData.map((t: Transaction) => ({
         ...t,
         amount: Number(t.amount),
@@ -94,39 +119,109 @@ export default function Transactions() {
           categoriesData.find((c: Category) => c.id === t.category)?.name || "—",
       }));
 
-      // Set the state with the fully processed data
       setTransactions(transactionsWithNames);
       setCategories(categoriesData);
     } catch (err) {
-      console.error("Error fetching data", err);
-      setError("Failed to fetch data. Please try again.");
+      const error = err as AxiosError<{ detail?: string; message?: string }>;
+      const errorMessage =
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        error.message;
+
+      if (error.response?.status === 401 && errorMessage.includes("token")) {
+        console.log("Attempting to refresh token...");
+        const newToken = await refreshToken();
+        if (newToken) {
+          try {
+            const [transactionsRes, categoriesRes] = await Promise.all([
+              axios.get("https://beimnettadesse.pythonanywhere.com/api/core/transactions/", {
+                headers: { Authorization: `Bearer ${newToken}` },
+              }),
+              axios.get("https://beimnettadesse.pythonanywhere.com/api/core/categories/", {
+                headers: { Authorization: `Bearer ${newToken}` },
+              }),
+            ]);
+
+            const categoriesData = categoriesRes.data;
+            const transactionsData = transactionsRes.data;
+
+            const transactionsWithNames = transactionsData.map((t: Transaction) => ({
+              ...t,
+              amount: Number(t.amount),
+              type: t.type.toLowerCase(),
+              category_name:
+                categoriesData.find((c: Category) => c.id === t.category)?.name || "—",
+            }));
+
+            setTransactions(transactionsWithNames);
+            setCategories(categoriesData);
+          } catch (retryErr) {
+            const retryError = retryErr as AxiosError<{ detail?: string; message?: string }>;
+            const retryMessage =
+              retryError.response?.data?.detail ||
+              retryError.response?.data?.message ||
+              retryError.message;
+            setError(`Failed to load data: ${retryMessage}`);
+          }
+        } else {
+          setError("Failed to refresh token. Please log in again.");
+        }
+      } else {
+        setError(`Failed to fetch data: ${errorMessage}`);
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [refreshToken]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const deleteTransaction = async (id: number) => {
     if (!confirm("Are you sure you want to delete this transaction?")) return;
 
-    try {
-      const token = localStorage.getItem("accessToken");
-      if (!token) {
-        setError("You must be logged in to delete transactions.");
-        return;
-      }
+    const token = localStorage.getItem("accessToken");
+    if (!token) {
+      setError("You must be logged in to delete transactions.");
+      return;
+    }
 
+    try {
       await axios.delete(`https://beimnettadesse.pythonanywhere.com/api/core/transactions/${id}/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      // Re-fetch all data to ensure the list is up-to-date
       fetchData();
     } catch (err) {
-      console.error("Error deleting transaction", err);
-      setError("Failed to delete the transaction. Please try again.");
+      const error = err as AxiosError<{ detail?: string; message?: string }>;
+      const errorMessage =
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        error.message;
+
+      if (error.response?.status === 401 && errorMessage.includes("token")) {
+        console.log("Attempting to refresh token for delete...");
+        const newToken = await refreshToken();
+        if (newToken) {
+          try {
+            await axios.delete(`https://beimnettadesse.pythonanywhere.com/api/core/transactions/${id}/`, {
+              headers: { Authorization: `Bearer ${newToken}` },
+            });
+            fetchData();
+          } catch (retryErr) {
+            const retryError = retryErr as AxiosError<{ detail?: string; message?: string }>;
+            const retryMessage =
+              retryError.response?.data?.detail ||
+              retryError.response?.data?.message ||
+              retryError.message;
+            setError(`Failed to delete the transaction: ${retryMessage}`);
+          }
+        } else {
+          setError("Failed to refresh token. Please log in again.");
+        }
+      } else {
+        setError(`Failed to delete the transaction: ${errorMessage}`);
+      }
     }
   };
 
@@ -198,7 +293,7 @@ export default function Transactions() {
       return;
     }
 
-    const payload: any = {
+    const payload: TransactionPayload = {
       description: formData.description,
       amount: amountNumber,
       type: formData.type,
@@ -228,11 +323,48 @@ export default function Transactions() {
       }
 
       setModalOpen(false);
-      // Re-fetch all data to ensure the list is up-to-date
       fetchData();
     } catch (err) {
-      console.error("Error saving transaction", err);
-      setError("Failed to save the transaction. Please try again.");
+      const error = err as AxiosError<{ detail?: string; message?: string }>;
+      const errorMessage =
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        error.message;
+
+      if (error.response?.status === 401 && errorMessage.includes("token")) {
+        console.log("Attempting to refresh token for save...");
+        const newToken = await refreshToken();
+        if (newToken) {
+          try {
+            if (editingTransaction) {
+              await axios.put(
+                `https://beimnettadesse.pythonanywhere.com/api/core/transactions/${editingTransaction.id}/`,
+                payload,
+                { headers: { Authorization: `Bearer ${newToken}` } }
+              );
+            } else {
+              await axios.post(
+                `https://beimnettadesse.pythonanywhere.com/api/core/transactions/`,
+                payload,
+                { headers: { Authorization: `Bearer ${newToken}` } }
+              );
+            }
+            setModalOpen(false);
+            fetchData();
+          } catch (retryErr) {
+            const retryError = retryErr as AxiosError<{ detail?: string; message?: string }>;
+            const retryMessage =
+              retryError.response?.data?.detail ||
+              retryError.response?.data?.message ||
+              retryError.message;
+            setError(`Failed to save the transaction: ${retryMessage}`);
+          }
+        } else {
+          setError("Failed to refresh token. Please log in again.");
+        }
+      } else {
+        setError(`Failed to save the transaction: ${errorMessage}`);
+      }
     }
   };
 
@@ -248,7 +380,6 @@ export default function Transactions() {
 
   return (
     <div className="min-h-screen bg-gray-100 font-sans p-4 sm:p-8">
-      {/* Header and Buttons */}
       <div className="space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
@@ -270,42 +401,39 @@ export default function Transactions() {
           </div>
         </div>
 
-      {/* Summary Cards - taller and stronger shadow */}
-<div className="grid gap-6 md:grid-cols-3">
-  {[
-    { title: "Total Income", value: totalIncome, color: "green" },
-    { title: "Total Expenses", value: totalExpenses, color: "red" },
-    {
-      title: "Net Income",
-      value: netIncome,
-      color: netIncome >= 0 ? "green" : "red",
-    },
-  ].map(({ title, value, color }) => (
-    <div
-      key={title}
-      className="rounded-lg border border-gray-200 bg-white text-card-foreground shadow-lg p-8 flex flex-col justify-between"
-      style={{ minHeight: "140px", transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)" }}
-    >
-      <div className="pb-4">
-        <h3 className="text-sm font-medium text-gray-500">{title}</h3>
-      </div>
-      <div>
-        <div
-          className={`text-3xl font-bold ${
-            color === "green" ? "text-green-600" : "text-red-600"
-          }`}
-        >
-          {title === "Net Income" && value >= 0 ? "+" : ""}
-          {title === "Net Income" && value < 0 ? "-" : ""}
-          ${Math.abs(value).toFixed(2)}
+        <div className="grid gap-6 md:grid-cols-3">
+          {[
+            { title: "Total Income", value: totalIncome, color: "green" },
+            { title: "Total Expenses", value: totalExpenses, color: "red" },
+            {
+              title: "Net Income",
+              value: netIncome,
+              color: netIncome >= 0 ? "green" : "red",
+            },
+          ].map(({ title, value, color }) => (
+            <div
+              key={title}
+              className="rounded-lg border border-gray-200 bg-white text-card-foreground shadow-lg p-8 flex flex-col justify-between"
+              style={{ minHeight: "140px", transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)" }}
+            >
+              <div className="pb-4">
+                <h3 className="text-sm font-medium text-gray-500">{title}</h3>
+              </div>
+              <div>
+                <div
+                  className={`text-3xl font-bold ${
+                    color === "green" ? "text-green-600" : "text-red-600"
+                  }`}
+                >
+                  {title === "Net Income" && value >= 0 ? "+" : ""}
+                  {title === "Net Income" && value < 0 ? "-" : ""}
+                  ${Math.abs(value).toFixed(2)}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
-    </div>
-  ))}
-</div>
 
-
-        {/* Filters Section - lighter border, shadow, smooth */}
         <div
           className="rounded-xl border border-gray-200 bg-white text-card-foreground shadow-md p-6 transition-shadow hover:shadow-lg"
           style={{ transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)" }}
@@ -386,7 +514,6 @@ export default function Transactions() {
           </div>
         </div>
 
-        {/* Recent Transactions Table */}
         <div
           className="rounded-xl border border-gray-200 bg-white text-card-foreground shadow-md p-6 mt-6 transition-shadow hover:shadow-lg"
           style={{ transitionTimingFunction: "cubic-bezier(0.4, 0, 0.2, 1)" }}
@@ -490,12 +617,11 @@ export default function Transactions() {
         </div>
       </div>
 
-      {/* Modal */}
       {modalOpen && (
-       <div
-       className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-       onClick={() => setModalOpen(false)}
-     >
+        <div
+          className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => setModalOpen(false)}
+        >
           <div
             className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md max-h-full overflow-auto"
             onClick={(e) => e.stopPropagation()}
