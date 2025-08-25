@@ -1,178 +1,6 @@
-// 'use client'
-
-// import React, { useState, FormEvent } from 'react'
-// import { useRouter } from 'next/navigation'
-// import Link from 'next/link'
-
-// export default function RegisterPage() {
-//   const router = useRouter()
-//   const [formData, setFormData] = useState({
-//     username: '',
-//     email: '',
-//     password: '',
-//     password2: '',
-//   })
-
-//   const [error, setError] = useState('')
-//   const [loading, setLoading] = useState(false)
-
-//   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-//     setFormData({ ...formData, [e.target.name]: e.target.value })
-//   }
-
-//   async function handleSubmit(e: FormEvent) {
-//     e.preventDefault()
-//     setError('')
-//     setLoading(true)
-
-//     if (formData.password !== formData.password2) {
-//       setError("Passwords don't match.")
-//       setLoading(false)
-//       return
-//     }
-
-//     try {
-//       // 1️⃣ Register the user
-//       const res = await fetch('http://localhost:8000/api/accounts/register/', {
-//         method: 'POST',
-//         headers: { 'Content-Type': 'application/json' },
-//         body: JSON.stringify(formData),
-//       })
-
-//       if (!res.ok) {
-//         let errorMessage = 'Registration failed.'
-//         try {
-//           const errorData = await res.json()
-//           errorMessage = Object.values(errorData).flat().join(' ') || errorMessage
-//         } catch {
-//           errorMessage = await res.text() || errorMessage
-//         }
-//         throw new Error(errorMessage)
-//       }
-
-//       // 2️⃣ Auto-login after successful registration
-//       const loginRes = await fetch('http://localhost:8000/api/accounts/login/', {
-//         method: 'POST',
-//         headers: { 'Content-Type': 'application/json' },
-//         body: JSON.stringify({ username: formData.username, password: formData.password }),
-//       })
-
-//       if (!loginRes.ok) throw new Error('Login after registration failed')
-
-//       const loginData = await loginRes.json()
-//       localStorage.setItem('accessToken', loginData.access)
-//       localStorage.setItem('refreshToken', loginData.refresh)
-
-//       // 3️⃣ Redirect to dashboard
-//       router.push('/dashboard')
-//     } catch (err) {
-//       console.error('❌ Registration error:', err)
-//       if (err instanceof Error) setError(err.message)
-//       else setError('An unexpected error occurred.')
-//     } finally {
-//       setLoading(false)
-//     }
-//   }
-
-//   return (
-//     <div className="min-h-screen flex items-center justify-center bg-gray-100 font-sans p-4">
-//       <form
-//         onSubmit={handleSubmit}
-//         className="w-full max-w-md p-8 bg-white rounded-xl shadow-lg space-y-6"
-//       >
-//         <h2 className="text-3xl font-bold text-center text-gray-800">Register</h2>
-//         {error && (
-//           <p className="text-red-600 bg-red-100 p-3 rounded-md text-center border border-red-200">
-//             {error}
-//           </p>
-//         )}
-
-//         <div>
-//           <label htmlFor="username" className="block text-gray-700 text-sm font-medium mb-1">
-//             Username
-//           </label>
-//           <input
-//             type="text"
-//             id="username"
-//             name="username"
-//             placeholder="Choose a username"
-//             value={formData.username}
-//             onChange={handleChange}
-//             required
-//             className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-//           />
-//         </div>
-
-//         <div>
-//           <label htmlFor="email" className="block text-gray-700 text-sm font-medium mb-1">
-//             Email
-//           </label>
-//           <input
-//             type="email"
-//             id="email"
-//             name="email"
-//             placeholder="Enter your email"
-//             value={formData.email}
-//             onChange={handleChange}
-//             required
-//             className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-//           />
-//         </div>
-
-//         <div>
-//           <label htmlFor="password" className="block text-gray-700 text-sm font-medium mb-1">
-//             Password
-//           </label>
-//           <input
-//             type="password"
-//             id="password"
-//             name="password"
-//             placeholder="Create a password"
-//             value={formData.password}
-//             onChange={handleChange}
-//             required
-//             className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-//           />
-//         </div>
-
-//         <div>
-//           <label htmlFor="password2" className="block text-gray-700 text-sm font-medium mb-1">
-//             Confirm Password
-//           </label>
-//           <input
-//             type="password"
-//             id="password2"
-//             name="password2"
-//             placeholder="Confirm your password"
-//             value={formData.password2}
-//             onChange={handleChange}
-//             required
-//             className="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-//           />
-//         </div>
-
-//         <button
-//           type="submit"
-//           disabled={loading}
-//           className="w-full bg-purple-700 text-white p-3 rounded-lg font-semibold hover:bg-purple-800 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-//         >
-//           {loading ? 'Registering...' : 'Register'}
-//         </button>
-
-//         <p className="text-sm text-center text-gray-600">
-//           Already have an account?{' '}
-//           <Link href="/login" className="text-purple-700 hover:underline font-medium">
-//             Login here
-//           </Link>
-//         </p>
-//       </form>
-//     </div>
-//   )
-// }
-
 'use client'
 
-import React, { useState, FormEvent } from 'react'
+import React, { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { LayoutDashboard, ArrowLeft, Eye, EyeOff } from 'lucide-react'
 
@@ -193,7 +21,7 @@ export default function RegisterPage() {
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
 
-  async function handleSubmit(e: FormEvent) {
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setLoading(true)
@@ -205,12 +33,12 @@ export default function RegisterPage() {
     }
 
     try {
-      // Register
       const res = await fetch('https://beimnettadesse.pythonanywhere.com/api/accounts/register/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
       })
+      
       if (!res.ok) {
         let errorMessage = 'Registration failed.'
         try {
@@ -222,13 +50,16 @@ export default function RegisterPage() {
         throw new Error(errorMessage)
       }
 
-      // Auto-login
       const loginRes = await fetch('https://beimnettadesse.pythonanywhere.com/api/accounts/login/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: formData.username, password: formData.password }),
       })
-      if (!loginRes.ok) throw new Error('Login after registration failed')
+      
+      if (!loginRes.ok) {
+        const errorData = await loginRes.json()
+        throw new Error(errorData.detail || 'Login after registration failed')
+      }
 
       const loginData = await loginRes.json()
       localStorage.setItem('accessToken', loginData.access)
@@ -236,16 +67,18 @@ export default function RegisterPage() {
 
       router.push('/dashboard')
     } catch (err) {
-      if (err instanceof Error) setError(err.message)
-      else setError('An unexpected error occurred.')
+      if (err instanceof Error) {
+        setError(err.message)
+      } else {
+        setError('An unexpected error occurred.')
+      }
     } finally {
       setLoading(false)
     }
-  }
+  }, [formData, router])
 
   return (
     <div className="min-h-screen flex">
-      {/* Left Hero Section - identical to login */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-purple-600 via-purple-500 to-purple-700 relative overflow-hidden text-white">
         <div className="absolute inset-0 opacity-30 bg-gradient-to-tr from-white/10 via-white/5 to-white/10"></div>
         <div className="flex flex-col justify-center items-center p-12 relative z-10 text-center w-full">
@@ -270,16 +103,13 @@ export default function RegisterPage() {
           </div>
 
           <blockquote className="mt-16 text-lg italic opacity-90 max-w-md mx-auto">
-            "Take control of your financial future with confidence and clarity."
+            &quot;Take control of your financial future with confidence and clarity.&quot;
           </blockquote>
-
         </div>
       </div>
 
-      {/* Right Registration Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-gray-50">
         <div className="w-full max-w-md">
-          {/* Mobile back button */}
           <button
             onClick={() => router.push('/')}
             className="lg:hidden mb-8 flex items-center gap-2 text-purple-700 hover:text-purple-900 transition"
@@ -287,13 +117,11 @@ export default function RegisterPage() {
             <ArrowLeft className="w-4 h-4"/> Back
           </button>
 
-          {/* Mobile Logo */}
           <div className="flex items-center gap-2 mb-8 lg:hidden justify-center">
             <LayoutDashboard className="w-8 h-8 text-purple-700"/>
             <span className="text-2xl font-bold text-purple-700">FinanceMate</span>
           </div>
 
-          {/* Form Card */}
           <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
             <div className="p-6 text-center border-b border-gray-100">
               <h2 className="text-2xl font-bold mb-1">Register</h2>
