@@ -61,7 +61,7 @@ export default function Budgets() {
     }
 
     try {
-      const response = await axios.post("http://localhost:8000/api/token/refresh/", {
+      const response = await axios.post("https://beimnettadesse.pythonanywhere.com/api/token/refresh/", {
         refresh: refreshToken,
       });
       const newAccessToken = response.data.access;
@@ -98,13 +98,13 @@ export default function Budgets() {
 
     try {
       const [categoriesRes, budgetsRes, transactionsRes] = await Promise.all([
-        axios.get<Category[]>("http://localhost:8000/api/core/categories/", {
+        axios.get<Category[]>("https://beimnettadesse.pythonanywhere.com/api/core/categories/", {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        axios.get<BudgetItem[]>("http://localhost:8000/api/core/budgets/", {
+        axios.get<BudgetItem[]>("https://beimnettadesse.pythonanywhere.com/api/core/budgets/", {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        axios.get<Transaction[]>("http://localhost:8000/api/core/transactions/", {
+        axios.get<Transaction[]>("https://beimnettadesse.pythonanywhere.com/api/core/transactions/", {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
@@ -143,13 +143,13 @@ export default function Budgets() {
         if (newToken) {
           try {
             const [categoriesRes, budgetsRes, transactionsRes] = await Promise.all([
-              axios.get<Category[]>("http://localhost:8000/api/core/categories/", {
+              axios.get<Category[]>("https://beimnettadesse.pythonanywhere.com/api/core/categories/", {
                 headers: { Authorization: `Bearer ${newToken}` },
               }),
-              axios.get<BudgetItem[]>("http://localhost:8000/api/core/budgets/", {
+              axios.get<BudgetItem[]>("https://beimnettadesse.pythonanywhere.com/api/core/budgets/", {
                 headers: { Authorization: `Bearer ${newToken}` },
               }),
-              axios.get<Transaction[]>("http://localhost:8000/api/core/transactions/", {
+              axios.get<Transaction[]>("https://beimnettadesse.pythonanywhere.com/api/core/transactions/", {
                 headers: { Authorization: `Bearer ${newToken}` },
               }),
             ]);
@@ -260,7 +260,7 @@ export default function Budgets() {
     }
 
     try {
-      await axios.delete(`http://localhost:8000/api/core/budgets/${id}/`, {
+      await axios.delete(`https://beimnettadesse.pythonanywhere.com/api/core/budgets/${id}/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       await fetchData();
@@ -277,7 +277,7 @@ export default function Budgets() {
         const newToken = await refreshToken();
         if (newToken) {
           try {
-            await axios.delete(`http://localhost:8000/api/core/budgets/${id}/`, {
+            await axios.delete(`https://beimnettadesse.pythonanywhere.com/api/core/budgets/${id}/`, {
               headers: { Authorization: `Bearer ${newToken}` },
             });
             await fetchData();
@@ -372,14 +372,14 @@ export default function Budgets() {
       setError(null);
       if (editingBudget) {
         await axios.put(
-          `http://localhost:8000/api/core/budgets/${editingBudget.id}/`,
+          `https://beimnettadesse.pythonanywhere.com/api/core/budgets/${editingBudget.id}/`,
           payload,
           { headers: { Authorization: `Bearer ${token}` } }
         );
         showToast("Budget updated successfully.");
       } else {
         await axios.post(
-          "http://localhost:8000/api/core/budgets/",
+          "https://beimnettadesse.pythonanywhere.com/api/core/budgets/",
           payload,
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -401,14 +401,14 @@ export default function Budgets() {
           try {
             if (editingBudget) {
               await axios.put(
-                `http://localhost:8000/api/core/budgets/${editingBudget.id}/`,
+                `https://beimnettadesse.pythonanywhere.com/api/core/budgets/${editingBudget.id}/`,
                 payload,
                 { headers: { Authorization: `Bearer ${newToken}` } }
               );
               showToast("Budget updated successfully.");
             } else {
               await axios.post(
-                "http://localhost:8000/api/core/budgets/",
+                "https://beimnettadesse.pythonanywhere.com/api/core/budgets/",
                 payload,
                 { headers: { Authorization: `Bearer ${newToken}` } }
               );

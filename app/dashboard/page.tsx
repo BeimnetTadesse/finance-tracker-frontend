@@ -1,6 +1,6 @@
-"use client";
+'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -71,16 +71,10 @@ const sidebarLinks = [
 ];
 
 export default function DashboardPage() {
-  // Sidebar state
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-
-  // User state
   const [username, setUsername] = useState<string | null>(null);
-  const [userName, setUserName] = useState("User"); // For dashboard greeting fallback
-
-  // Dashboard data state
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [budgets, setBudgets] = useState<BudgetItem[]>([]);
@@ -88,54 +82,63 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Calculate summary data dynamically
   const summaryData: SummaryData = (() => {
-    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+    const currentMonth = new Date().toISOString().slice(0, 7);
     const prevMonth = new Date(new Date().setMonth(new Date().getMonth() - 1)).toISOString().slice(0, 7);
 
     const monthlyIncome = transactions
-      .filter(t => t.type === 'income' && t.date.startsWith(currentMonth))
+      .filter((t) => t.type === 'income' && t.date.startsWith(currentMonth))
       .reduce((sum, t) => sum + t.amount, 0);
 
     const monthlyExpenses = transactions
-      .filter(t => t.type === 'expense' && t.date.startsWith(currentMonth))
+      .filter((t) => t.type === 'expense' && t.date.startsWith(currentMonth))
       .reduce((sum, t) => sum + t.amount, 0);
 
     const prevMonthlyIncome = transactions
-      .filter(t => t.type === 'income' && t.date.startsWith(prevMonth))
+      .filter((t) => t.type === 'income' && t.date.startsWith(prevMonth))
       .reduce((sum, t) => sum + t.amount, 0);
 
     const prevMonthlyExpenses = transactions
-      .filter(t => t.type === 'expense' && t.date.startsWith(prevMonth))
+      .filter((t) => t.type === 'expense' && t.date.startsWith(prevMonth))
       .reduce((sum, t) => sum + t.amount, 0);
 
-    const totalBalance = transactions.reduce((sum, t) => 
-      sum + (t.type === 'income' ? t.amount : -t.amount), 0);
+    const totalBalance = transactions.reduce(
+      (sum, t) => sum + (t.type === 'income' ? t.amount : -t.amount),
+      0
+    );
 
-    const savingsRate = monthlyIncome > 0 
-      ? ((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100 
-      : 0;
+    const savingsRate =
+      monthlyIncome > 0 ? ((monthlyIncome - monthlyExpenses) / monthlyIncome) * 100 : 0;
 
     const prevTotalBalance = transactions
-      .filter(t => new Date(t.date) < new Date(currentMonth))
+      .filter((t) => new Date(t.date) < new Date(currentMonth))
       .reduce((sum, t) => sum + (t.type === 'income' ? t.amount : -t.amount), 0);
 
-    const balanceChange = prevTotalBalance !== 0 
-      ? ((totalBalance - prevTotalBalance) / Math.abs(prevTotalBalance)) * 100 
-      : 0;
+    const balanceChange =
+      prevTotalBalance !== 0
+        ? ((totalBalance - prevTotalBalance) / Math.abs(prevTotalBalance)) * 100
+        : 0;
 
-    const incomeChange = prevMonthlyIncome !== 0 
-      ? ((monthlyIncome - prevMonthlyIncome) / prevMonthlyIncome) * 100 
-      : monthlyIncome > 0 ? 100 : 0;
+    const incomeChange =
+      prevMonthlyIncome !== 0
+        ? ((monthlyIncome - prevMonthlyIncome) / prevMonthlyIncome) * 100
+        : monthlyIncome > 0
+        ? 100
+        : 0;
 
-    const expensesChange = prevMonthlyExpenses !== 0 
-      ? ((monthlyExpenses - prevMonthlyExpenses) / prevMonthlyExpenses) * 100 
-      : monthlyExpenses > 0 ? 100 : 0;
+    const expensesChange =
+      prevMonthlyExpenses !== 0
+        ? ((monthlyExpenses - prevMonthlyExpenses) / prevMonthlyExpenses) * 100
+        : monthlyExpenses > 0
+        ? 100
+        : 0;
 
-    const savingsChange = prevMonthlyIncome !== 0 && monthlyIncome !== 0
-      ? (((monthlyIncome - monthlyExpenses) / monthlyIncome) - 
-         ((prevMonthlyIncome - prevMonthlyExpenses) / prevMonthlyIncome)) * 100
-      : 0;
+    const savingsChange =
+      prevMonthlyIncome !== 0 && monthlyIncome !== 0
+        ? ((monthlyIncome - monthlyExpenses) / monthlyIncome -
+            (prevMonthlyIncome - prevMonthlyExpenses) / prevMonthlyIncome) *
+          100
+        : 0;
 
     return {
       totalBalance,
@@ -149,71 +152,72 @@ export default function DashboardPage() {
     };
   })();
 
-  // Refresh token function
   const refreshToken = async (): Promise<string | null> => {
-    const refreshToken = localStorage.getItem("refreshToken");
+    const refreshToken = localStorage.getItem('refreshToken');
     if (!refreshToken) {
-      setError("No refresh token available. Please log in again.");
+      setError('No refresh token available. Please log in again.');
+      router.push('/login');
       return null;
     }
     try {
-      const response = await axios.post("http://localhost:8000/api/token/refresh/", {
-        refresh: refreshToken,
-      });
+      const response = await axios.post(
+        'https://beimnettadesse.pythonanywhere.com/api/token/refresh/',
+        { refresh: refreshToken }
+      );
       const newAccessToken = response.data.access;
-      localStorage.setItem("accessToken", newAccessToken);
+      localStorage.setItem('accessToken', newAccessToken);
       return newAccessToken;
     } catch (err) {
       const error = err as AxiosError<{ detail?: string; message?: string }>;
-      setError("Session expired. Please log in again.");
-      localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
+      setError('Session expired. Please log in again.');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      router.push('/login');
       return null;
     }
   };
 
-  // Fetch all data
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
-    let token = localStorage.getItem("accessToken");
+    const token = localStorage.getItem('accessToken');
     if (!token) {
-      setError("You must be logged in to view the dashboard.");
+      setError('You must be logged in to view the dashboard.');
       setTransactions([]);
       setCategories([]);
       setBudgets([]);
       setSavingsGoals([]);
       setUsername(null);
       setLoading(false);
+      router.push('/login');
       return;
     }
     try {
       const [profileRes, transactionsRes, categoriesRes, budgetsRes, goalsRes] = await Promise.all([
-        axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/accounts/profile/`, {
+        axios.get('https://beimnettadesse.pythonanywhere.com/api/accounts/profile/', {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        axios.get("http://localhost:8000/api/core/transactions/", {
+        axios.get('https://beimnettadesse.pythonanywhere.com/api/core/transactions/', {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        axios.get("http://localhost:8000/api/core/categories/", {
+        axios.get('https://beimnettadesse.pythonanywhere.com/api/core/categories/', {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        axios.get("http://localhost:8000/api/core/budgets/", {
+        axios.get('https://beimnettadesse.pythonanywhere.com/api/core/budgets/', {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        axios.get("http://localhost:8000/api/core/goals/", {
+        axios.get('https://beimnettadesse.pythonanywhere.com/api/core/goals/', {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
 
       setUsername(profileRes.data.username);
-      setUserName(profileRes.data.username);
 
       const transactionsWithNames = transactionsRes.data.map((t: Transaction) => ({
         ...t,
         amount: Number(t.amount),
         type: t.type.toLowerCase() as 'income' | 'expense',
-        category_name: categoriesRes.data.find((c: Category) => c.id === t.category)?.name || "—",
+        category_name: categoriesRes.data.find((c: Category) => c.id === t.category)?.name || '—',
       }));
 
       const parsedBudgets = budgetsRes.data.map((b: BudgetItem) => ({
@@ -234,36 +238,35 @@ export default function DashboardPage() {
     } catch (err) {
       const error = err as AxiosError<{ detail?: string; message?: string }>;
       const errorMessage = error.response?.data?.detail || error.response?.data?.message || error.message;
-      if (error.response?.status === 401 && errorMessage.includes("token not valid")) {
+      if (error.response?.status === 401 && errorMessage.includes('token not valid')) {
         const newToken = await refreshToken();
         if (newToken) {
           try {
             const [profileRes, transactionsRes, categoriesRes, budgetsRes, goalsRes] = await Promise.all([
-              axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/accounts/profile/`, {
+              axios.get('https://beimnettadesse.pythonanywhere.com/api/accounts/profile/', {
                 headers: { Authorization: `Bearer ${newToken}` },
               }),
-              axios.get("http://localhost:8000/api/core/transactions/", {
+              axios.get('https://beimnettadesse.pythonanywhere.com/api/core/transactions/', {
                 headers: { Authorization: `Bearer ${newToken}` },
               }),
-              axios.get("http://localhost:8000/api/core/categories/", {
+              axios.get('https://beimnettadesse.pythonanywhere.com/api/core/categories/', {
                 headers: { Authorization: `Bearer ${newToken}` },
               }),
-              axios.get("http://localhost:8000/api/core/budgets/", {
+              axios.get('https://beimnettadesse.pythonanywhere.com/api/core/budgets/', {
                 headers: { Authorization: `Bearer ${newToken}` },
               }),
-              axios.get("http://localhost:8000/api/core/goals/", {
+              axios.get('https://beimnettadesse.pythonanywhere.com/api/core/goals/', {
                 headers: { Authorization: `Bearer ${newToken}` },
               }),
             ]);
 
             setUsername(profileRes.data.username);
-            setUserName(profileRes.data.username);
 
             const transactionsWithNames = transactionsRes.data.map((t: Transaction) => ({
               ...t,
               amount: Number(t.amount),
               type: t.type.toLowerCase() as 'income' | 'expense',
-              category_name: categoriesRes.data.find((c: Category) => c.id === t.category)?.name || "—",
+              category_name: categoriesRes.data.find((c: Category) => c.id === t.category)?.name || '—',
             }));
 
             const parsedBudgets = budgetsRes.data.map((b: BudgetItem) => ({
@@ -282,10 +285,17 @@ export default function DashboardPage() {
             setBudgets(parsedBudgets);
             setSavingsGoals(parsedGoals);
           } catch (retryErr) {
-            setError("Failed to load data after token refresh. Please log in again.");
+            const retryError = retryErr as AxiosError<{ detail?: string; message?: string }>;
+            setError(
+              `Failed to load data after token refresh: ${
+                retryError.response?.data?.detail || retryError.response?.data?.message || retryError.message
+              }`
+            );
+            router.push('/login');
           }
         } else {
-          setError("Failed to refresh token. Please log in again.");
+          setError('Failed to refresh token. Please log in again.');
+          router.push('/login');
         }
       } else {
         setError(`Failed to load data: ${errorMessage}`);
@@ -293,20 +303,19 @@ export default function DashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
-  // Calculate amount spent for budgets
   const getAmountSpent = (categoryId: number, month: string): number => {
     const monthStart = new Date(month);
     const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
     return transactions
       .filter(
         (t) =>
-          t.type === "expense" &&
+          t.type === 'expense' &&
           t.category === categoryId &&
           new Date(t.date) >= monthStart &&
           new Date(t.date) <= monthEnd
@@ -314,23 +323,20 @@ export default function DashboardPage() {
       .reduce((sum, t) => sum + t.amount, 0);
   };
 
-  // Logout handler
   const handleLogout = () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     router.push('/');
   };
 
-  // Format budgets for display
-  const formattedBudgets = budgets.map(budget => ({
+  const formattedBudgets = budgets.map((budget) => ({
     id: budget.id,
-    category: categories.find(c => c.id === budget.category)?.name || "Unknown",
+    category: categories.find((c) => c.id === budget.category)?.name || 'Unknown',
     amount_spent: getAmountSpent(budget.category, budget.month),
     amount_total: budget.amount,
   }));
 
-  // Format savings goals for display
-  const formattedSavingsGoals = savingsGoals.map(goal => ({
+  const formattedSavingsGoals = savingsGoals.map((goal) => ({
     id: goal.id,
     goalName: goal.title,
     savedAmount: goal.current_amount,
@@ -339,7 +345,6 @@ export default function DashboardPage() {
 
   return (
     <div className="flex h-screen bg-gray-100 font-sans relative overflow-hidden">
-      {/* Hamburger Button - show only when sidebar is closed on mobile */}
       {!sidebarOpen && (
         <button
           className="md:hidden fixed top-4 left-4 z-50 bg-white p-2 rounded shadow"
@@ -350,7 +355,6 @@ export default function DashboardPage() {
         </button>
       )}
 
-      {/* Sidebar */}
       <aside
         className={`
           fixed top-0 left-0 h-screen w-64 bg-white p-6 shadow-lg flex flex-col justify-between
@@ -360,7 +364,6 @@ export default function DashboardPage() {
         `}
       >
         <div>
-          {/* Mobile close button */}
           <div className="flex justify-between items-center mb-6 md:hidden">
             <span className="text-xl font-bold text-purple-700">FinanceMate</span>
             <button onClick={() => setSidebarOpen(false)} aria-label="Close sidebar menu">
@@ -368,13 +371,11 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          {/* Desktop logo */}
           <div className="hidden md:flex items-center gap-2 text-2xl font-bold text-purple-700 mb-12">
             <LayoutDashboard className="w-6 h-6" />
             <span>FinanceMate</span>
           </div>
 
-          {/* Navigation links */}
           <nav className="space-y-2">
             {sidebarLinks.map(({ href, icon: Icon, label }) => {
               const isActive = pathname === href;
@@ -409,18 +410,15 @@ export default function DashboardPage() {
         </button>
       </aside>
 
-      {/* Overlay on Mobile */}
       {sidebarOpen && (
-  <div
-    className="fixed inset-0 bg-transparent backdrop-blur-sm z-30 md:hidden"
-    onClick={() => setSidebarOpen(false)}
-  />
-)}
+        <div
+          className="fixed inset-0 bg-transparent backdrop-blur-sm z-30 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
-      {/* Main Content */}
       <main className="flex-1 overflow-y-auto w-full px-6 pt-20 md:pt-8 md:pl-8">
         <div className="mx-auto max-w-7xl">
-          {/* Header */}
           <h1 className="text-3xl font-bold mb-6 text-gray-800">
             Welcome{username ? `, ${username}` : ''}
           </h1>
@@ -433,86 +431,135 @@ export default function DashboardPage() {
             <p className="text-purple-700 font-semibold">Loading dashboard...</p>
           ) : (
             <>
-              {/* Summary Cards Section */}
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
-                {/* Total Balance Card */}
                 <div className="rounded-xl border border-gray-200 bg-white shadow-lg p-6">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-sm font-medium text-gray-500">Total Balance</h3>
                     <Wallet className="text-gray-400" size={20} />
                   </div>
-                  <div className="text-3xl font-bold text-purple-700">${summaryData.totalBalance.toFixed(2)}</div>
-                  <div className={`flex items-center mt-2 text-xs font-semibold ${summaryData.balanceChange >= 0 ? "text-green-600" : "text-red-600"}`}>
-                    {summaryData.balanceChange >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                  <div className="text-3xl font-bold text-purple-700">
+                    ${summaryData.totalBalance.toFixed(2)}
+                  </div>
+                  <div
+                    className={`flex items-center mt-2 text-xs font-semibold ${
+                      summaryData.balanceChange >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}
+                  >
+                    {summaryData.balanceChange >= 0 ? (
+                      <TrendingUp size={16} />
+                    ) : (
+                      <TrendingDown size={16} />
+                    )}
                     <span className="ml-1">{Math.abs(summaryData.balanceChange).toFixed(1)}%</span>
                     <span className="ml-1 text-gray-500 font-normal">from last month</span>
                   </div>
                 </div>
 
-                {/* Monthly Income Card */}
                 <div className="rounded-xl border border-gray-200 bg-white shadow-lg p-6">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-sm font-medium text-gray-500">Monthly Income</h3>
                     <PiggyBank className="text-gray-400" size={20} />
                   </div>
-                  <div className="text-3xl font-bold text-green-600">${summaryData.monthlyIncome.toFixed(2)}</div>
-                  <div className={`flex items-center mt-2 text-xs font-semibold ${summaryData.incomeChange >= 0 ? "text-green-600" : "text-red-600"}`}>
-                    {summaryData.incomeChange >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                  <div className="text-3xl font-bold text-green-600">
+                    ${summaryData.monthlyIncome.toFixed(2)}
+                  </div>
+                  <div
+                    className={`flex items-center mt-2 text-xs font-semibold ${
+                      summaryData.incomeChange >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}
+                  >
+                    {summaryData.incomeChange >= 0 ? (
+                      <TrendingUp size={16} />
+                    ) : (
+                      <TrendingDown size={16} />
+                    )}
                     <span className="ml-1">{Math.abs(summaryData.incomeChange).toFixed(1)}%</span>
                     <span className="ml-1 text-gray-500 font-normal">from last month</span>
                   </div>
                 </div>
 
-                {/* Monthly Expenses Card */}
                 <div className="rounded-xl border border-gray-200 bg-white shadow-lg p-6">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-sm font-medium text-gray-500">Monthly Expenses</h3>
                     <CreditCard className="text-gray-400" size={20} />
                   </div>
-                  <div className="text-3xl font-bold text-red-600">${summaryData.monthlyExpenses.toFixed(2)}</div>
-                  <div className={`flex items-center mt-2 text-xs font-semibold ${summaryData.expensesChange >= 0 ? "text-green-600" : "text-red-600"}`}>
-                    {summaryData.expensesChange >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                  <div className="text-3xl font-bold text-red-600">
+                    ${summaryData.monthlyExpenses.toFixed(2)}
+                  </div>
+                  <div
+                    className={`flex items-center mt-2 text-xs font-semibold ${
+                      summaryData.expensesChange >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}
+                  >
+                    {summaryData.expensesChange >= 0 ? (
+                      <TrendingUp size={16} />
+                    ) : (
+                      <TrendingDown size={16} />
+                    )}
                     <span className="ml-1">{Math.abs(summaryData.expensesChange).toFixed(1)}%</span>
                     <span className="ml-1 text-gray-500 font-normal">from last month</span>
                   </div>
                 </div>
 
-                {/* Savings Rate Card */}
                 <div className="rounded-xl border border-gray-200 bg-white shadow-lg p-6">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="text-sm font-medium text-gray-500">Savings Rate</h3>
                     <Scale className="text-gray-400" size={20} />
                   </div>
-                  <div className="text-3xl font-bold text-purple-700">{summaryData.savingsRate.toFixed(1)}%</div>
-                  <div className={`flex items-center mt-2 text-xs font-semibold ${summaryData.savingsChange >= 0 ? "text-green-600" : "text-red-600"}`}>
-                    {summaryData.savingsChange >= 0 ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                  <div className="text-3xl font-bold text-purple-700">
+                    {summaryData.savingsRate.toFixed(1)}%
+                  </div>
+                  <div
+                    className={`flex items-center mt-2 text-xs font-semibold ${
+                      summaryData.savingsChange >= 0 ? 'text-green-600' : 'text-red-600'
+                    }`}
+                  >
+                    {summaryData.savingsChange >= 0 ? (
+                      <TrendingUp size={16} />
+                    ) : (
+                      <TrendingDown size={16} />
+                    )}
                     <span className="ml-1">{Math.abs(summaryData.savingsChange).toFixed(1)}%</span>
                     <span className="ml-1 text-gray-500 font-normal">from last month</span>
                   </div>
                 </div>
               </div>
 
-              {/* Main dashboard grid: transactions + budgets */}
               <div className="grid gap-6 lg:grid-cols-2 mb-8">
-                {/* Recent Transactions Section */}
                 <div className="rounded-xl border border-gray-200 bg-white shadow-lg p-6">
                   <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-bold tracking-tight text-purple-700">Recent Transactions</h2>
-                    <Link href="/transactions" className="text-sm font-medium text-purple-700 hover:text-[#4658b8]">View All</Link>
+                    <h2 className="text-xl font-bold tracking-tight text-purple-700">
+                      Recent Transactions
+                    </h2>
+                    <Link
+                      href="/transactions"
+                      className="text-sm font-medium text-purple-700 hover:text-[#4658b8]"
+                    >
+                      View All
+                    </Link>
                   </div>
                   <div className="space-y-4">
-                    {transactions.slice(0, 4).map(transaction => (
+                    {transactions.slice(0, 4).map((transaction) => (
                       <div key={transaction.id} className="flex items-center justify-between">
                         <div className="flex items-center space-x-3">
-                          <div className={`w-2 h-2 rounded-full ${transaction.type === 'income' ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                          <div
+                            className={`w-2 h-2 rounded-full ${
+                              transaction.type === 'income' ? 'bg-green-500' : 'bg-red-500'
+                            }`}
+                          ></div>
                           <div>
                             <h4 className="font-semibold">{transaction.description}</h4>
                             <p className="text-xs text-gray-500">{transaction.category_name}</p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className={`font-bold ${transaction.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                            {transaction.type === 'income' ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)}
+                          <p
+                            className={`font-bold ${
+                              transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
+                            }`}
+                          >
+                            {transaction.type === 'income' ? '+' : '-'}$
+                            {Math.abs(transaction.amount).toFixed(2)}
                           </p>
                           <p className="text-xs text-gray-500">{transaction.date.substring(0, 10)}</p>
                         </div>
@@ -524,14 +571,20 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* Budget Overview Section */}
                 <div className="rounded-xl border border-gray-200 bg-white shadow-lg p-6">
                   <div className="flex justify-between items-center mb-6">
-                    <h2 className="text-xl font-bold tracking-tight text-purple-700">Budget Overview</h2>
-                    <Link href="/budgets" className="text-sm font-medium text-purple-700 hover:text-[#4658b8]">Manage</Link>
+                    <h2 className="text-xl font-bold tracking-tight text-purple-700">
+                      Budget Overview
+                    </h2>
+                    <Link
+                      href="/budgets"
+                      className="text-sm font-medium text-purple-700 hover:text-[#4658b8]"
+                    >
+                      Manage
+                    </Link>
                   </div>
                   <div className="space-y-6">
-                    {formattedBudgets.map(budget => {
+                    {formattedBudgets.map((budget) => {
                       const progress = (budget.amount_spent / budget.amount_total) * 100;
                       const isOverBudget = budget.amount_spent > budget.amount_total;
                       const progressColor = isOverBudget ? 'bg-red-500' : 'bg-green-500';
@@ -539,7 +592,9 @@ export default function DashboardPage() {
                         <div key={budget.id}>
                           <div className="flex justify-between items-center mb-1">
                             <span className="font-medium text-gray-700">{budget.category}</span>
-                            <span className="text-sm text-gray-500">${budget.amount_spent.toFixed(2)} / ${budget.amount_total.toFixed(2)}</span>
+                            <span className="text-sm text-gray-500">
+                              ${budget.amount_spent.toFixed(2)} / ${budget.amount_total.toFixed(2)}
+                            </span>
                           </div>
                           <div className="w-full bg-gray-200 rounded-full h-2.5">
                             <div
@@ -557,25 +612,33 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Savings Goals Section */}
               <div className="rounded-xl border border-gray-200 bg-white shadow-lg p-6 mt-8 mb-12">
                 <div className="flex justify-between items-center mb-6">
                   <div>
-                    <h2 className="text-xl font-bold tracking-tight text-purple-700">Savings Goals</h2>
+                    <h2 className="text-xl font-bold tracking-tight text-purple-700">
+                      Savings Goals
+                    </h2>
                     <p className="text-gray-600 text-sm mt-1">
                       Track your progress towards financial goals
                     </p>
                   </div>
-                  <Link href="/goals" className="text-sm font-medium text-purple-700 hover:text-[#4658b8]">View All</Link>
+                  <Link
+                    href="/goals"
+                    className="text-sm font-medium text-purple-700 hover:text-[#4658b8]"
+                  >
+                    View All
+                  </Link>
                 </div>
                 <div className="grid gap-6 md:grid-cols-3">
-                  {formattedSavingsGoals.map(goal => {
+                  {formattedSavingsGoals.map((goal) => {
                     const progress = (goal.savedAmount / goal.targetAmount) * 100;
                     return (
                       <div key={goal.id}>
                         <div className="flex justify-between items-end mb-2">
                           <span className="font-semibold text-gray-700">{goal.goalName}</span>
-                          <span className="text-xs font-medium text-gray-500">{progress.toFixed(0)}%</span>
+                          <span className="text-xs font-medium text-gray-500">
+                            {progress.toFixed(0)}%
+                          </span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
                           <div

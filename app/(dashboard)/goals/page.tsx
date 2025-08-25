@@ -70,7 +70,7 @@ export default function SavingGoals() {
       return;
     }
     try {
-      const response = await axios.get("http://localhost:8000/api/core/goals/", {
+      const response = await axios.get("https://beimnettadesse.pythonanywhere.com/api/core/goals/", {
         headers: { Authorization: `Bearer ${token}` },
       });
       const formattedData = response.data.map((g: any) => ({
@@ -99,7 +99,7 @@ export default function SavingGoals() {
         setError("You must be logged in to delete a goal.");
         return;
       }
-      await axios.delete(`http://localhost:8000/api/core/goals/${id}/`, {
+      await axios.delete(`https://beimnettadesse.pythonanywhere.com/api/core/goals/${id}/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       fetchData();
@@ -170,13 +170,13 @@ export default function SavingGoals() {
       setError(null);
       if (editingGoal) {
         await axios.put(
-          `http://localhost:8000/api/core/goals/${editingGoal.id}/`,
+          `https://beimnettadesse.pythonanywhere.com/api/core/goals/${editingGoal.id}/`,
           payload,
           { headers: { Authorization: `Bearer ${token}` } }
         );
       } else {
         await axios.post(
-          `http://localhost:8000/api/core/goals/`,
+          `https://beimnettadesse.pythonanywhere.com/api/core/goals/`,
           payload,
           { headers: { Authorization: `Bearer ${token}` } }
         );
@@ -217,7 +217,7 @@ export default function SavingGoals() {
     try {
       setError(null);
       await axios.put(
-        `http://localhost:8000/api/core/goals/${goalToFund.id}/`,
+        `https://beimnettadesse.pythonanywhere.com/api/core/goals/${goalToFund.id}/`,
         payload,
         { headers: { Authorization: `Bearer ${token}` } }
       );

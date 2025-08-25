@@ -74,10 +74,10 @@ export default function Transactions() {
     try {
       // Use Promise.all to fetch both transactions and categories concurrently
       const [transactionsRes, categoriesRes] = await Promise.all([
-        axios.get("http://localhost:8000/api/core/transactions/", {
+        axios.get("https://beimnettadesse.pythonanywhere.com/api/core/transactions/", {
           headers: { Authorization: `Bearer ${token}` },
         }),
-        axios.get("http://localhost:8000/api/core/categories/", {
+        axios.get("https://beimnettadesse.pythonanywhere.com/api/core/categories/", {
           headers: { Authorization: `Bearer ${token}` },
         }),
       ]);
@@ -119,7 +119,7 @@ export default function Transactions() {
         return;
       }
 
-      await axios.delete(`http://localhost:8000/api/core/transactions/${id}/`, {
+      await axios.delete(`https://beimnettadesse.pythonanywhere.com/api/core/transactions/${id}/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       // Re-fetch all data to ensure the list is up-to-date
@@ -215,13 +215,13 @@ export default function Transactions() {
 
       if (editingTransaction) {
         await axios.put(
-          `http://localhost:8000/api/core/transactions/${editingTransaction.id}/`,
+          `https://beimnettadesse.pythonanywhere.com/api/core/transactions/${editingTransaction.id}/`,
           payload,
           { headers: { Authorization: `Bearer ${token}` } }
         );
       } else {
         await axios.post(
-          `http://localhost:8000/api/core/transactions/`,
+          `https://beimnettadesse.pythonanywhere.com/api/core/transactions/`,
           payload,
           { headers: { Authorization: `Bearer ${token}` } }
         );

@@ -206,7 +206,7 @@ export default function RegisterPage() {
 
     try {
       // Register
-      const res = await fetch('http://localhost:8000/api/accounts/register/', {
+      const res = await fetch('https://beimnettadesse.pythonanywhere.com/api/accounts/register/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData),
@@ -223,7 +223,7 @@ export default function RegisterPage() {
       }
 
       // Auto-login
-      const loginRes = await fetch('http://localhost:8000/api/accounts/login/', {
+      const loginRes = await fetch('https://beimnettadesse.pythonanywhere.com/api/accounts/login/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: formData.username, password: formData.password }),

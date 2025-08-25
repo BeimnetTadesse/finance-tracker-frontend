@@ -39,7 +39,7 @@ const ProfilePage: React.FC = () => {
 
     // Fetch profile data
     axios
-      .get('http://localhost:8000/api/accounts/profile/', {
+      .get('https://beimnettadesse.pythonanywhere.com/api/accounts/profile/', {
         headers: { Authorization: `Bearer ${token}` },
       })
       .then((res) => {
@@ -53,7 +53,7 @@ const ProfilePage: React.FC = () => {
 
     // Fetch stats data
     axios
-      .get('http://localhost:8000/api/core/stats/', {
+      .get('https://beimnettadesse.pythonanywhere.com/api/core/stats/', {
         headers: { Authorization: `Bearer ${token}` },
       })
       .then((res) => {
@@ -79,7 +79,7 @@ const ProfilePage: React.FC = () => {
     setError(null);
 
     axios
-      .put('http://localhost:8000/api/accounts/profile/', profile, {
+      .put('https://beimnettadesse.pythonanywhere.com/api/accounts/profile/', profile, {
         headers: { Authorization: `Bearer ${token}` },
       })
       .then(() => {
@@ -100,13 +100,13 @@ const ProfilePage: React.FC = () => {
     setError(null);
 
     axios
-      .delete('http://localhost:8000/api/accounts/profile/', {
+      .delete('https://beimnettadesse.pythonanywhere.com/api/accounts/profile/', {
         headers: { Authorization: `Bearer ${token}` },
       })
       .then(() => {
         setDeleting(false);
         alert('Account deleted successfully!');
-        window.location.href = '/login';
+        window.location.href = '/';
       })
       .catch(() => {
         setDeleting(false);
@@ -239,7 +239,7 @@ const ProfilePage: React.FC = () => {
                       if (profile) {
                         setLoading(true);
                         axios
-                          .get('http://localhost:8000/api/accounts/profile/', {
+                          .get('https://beimnettadesse.pythonanywhere.com/api/accounts/profile/', {
                             headers: { Authorization: `Bearer ${token}` },
                           })
                           .then((res) => {
