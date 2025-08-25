@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import axios from "axios";
+import { useEffect, useState, useCallback } from "react";
+import axios, { AxiosError } from "axios";
 import { Plus, Pencil, Trash, Clock, Check, Target, DollarSign, LineChart, Calendar } from 'lucide-react';
 
 interface SavingGoal {
@@ -13,20 +13,21 @@ interface SavingGoal {
   description: string;
 }
 
+interface ApiResponse {
+  data: SavingGoal[];
+}
+
 export default function SavingGoals() {
   const [goals, setGoals] = useState<SavingGoal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isToastVisible, setIsToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
-
   const [modalOpen, setModalOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState<SavingGoal | null>(null);
-
   const [addMoneyModalOpen, setAddMoneyModalOpen] = useState(false);
   const [goalToFund, setGoalToFund] = useState<SavingGoal | null>(null);
   const [amountToAdd, setAmountToAdd] = useState("");
-
   const [formData, setFormData] = useState({
     title: "",
     target_amount: "",
@@ -59,7 +60,35 @@ export default function SavingGoals() {
     }, 3000);
   };
 
-  const fetchData = async () => {
+  const refreshToken = useCallback(async (): Promise<string | null> => {
+    const refreshToken = localStorage.getItem("refreshToken");
+    if (!refreshToken) {
+      setError("No refresh token available. Please log in again.");
+      return null;
+    }
+
+    try {
+      const response = await axios.post("https://beimnettadesse.pythonanywhere.com/api/accounts/token/refresh/", {
+        refresh: refreshToken,
+      });
+      const newAccessToken = response.data.access;
+      localStorage.setItem("accessToken", newAccessToken);
+      console.log("Token refreshed successfully");
+      return newAccessToken;
+    } catch (err) {
+      const error = err as AxiosError<{ detail?: string; message?: string }>;
+      console.error("Token refresh failed:", {
+        message: error.response?.data?.detail || error.message,
+        status: error.response?.status,
+      });
+      setError("Session expired. Please log in again.");
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
+      return null;
+    }
+  }, []);
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     const token = localStorage.getItem("accessToken");
@@ -69,44 +98,106 @@ export default function SavingGoals() {
       setLoading(false);
       return;
     }
+
     try {
-      const response = await axios.get("https://beimnettadesse.pythonanywhere.com/api/core/goals/", {
+      const response = await axios.get<SavingGoal[]>("https://beimnettadesse.pythonanywhere.com/api/core/goals/", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const formattedData = response.data.map((g: any) => ({
+      const formattedData = response.data.map((g: SavingGoal) => ({
         ...g,
         target_amount: Number(g.target_amount) || 0,
         current_amount: Number(g.current_amount) || 0,
       }));
       setGoals(formattedData);
     } catch (err) {
-      console.error("Error fetching saving goals", err);
-      setError("Failed to fetch saving goals. Please try again.");
+      const error = err as AxiosError<{ detail?: string; message?: string }>;
+      const errorMessage =
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        error.message;
+
+      if (error.response?.status === 401 && errorMessage.includes("token")) {
+        console.log("Attempting to refresh token...");
+        const newToken = await refreshToken();
+        if (newToken) {
+          try {
+            const response = await axios.get<SavingGoal[]>("https://beimnettadesse.pythonanywhere.com/api/core/goals/", {
+              headers: { Authorization: `Bearer ${newToken}` },
+            });
+            const formattedData = response.data.map((g: SavingGoal) => ({
+              ...g,
+              target_amount: Number(g.target_amount) || 0,
+              current_amount: Number(g.current_amount) || 0,
+            }));
+            setGoals(formattedData);
+          } catch (retryErr) {
+            const retryError = retryErr as AxiosError<{ detail?: string; message?: string }>;
+            const retryMessage =
+              retryError.response?.data?.detail ||
+              retryError.response?.data?.message ||
+              retryError.message;
+            setError(`Failed to load data: ${retryMessage}`);
+          }
+        } else {
+          setError("Failed to refresh token. Please log in again.");
+        }
+      } else {
+        setError(`Failed to fetch saving goals: ${errorMessage}`);
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [refreshToken]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const deleteGoal = async (id: number) => {
     if (!window.confirm("Are you sure you want to delete this saving goal?")) return;
+    const token = localStorage.getItem("accessToken");
+    if (!token) {
+      setError("You must be logged in to delete a goal.");
+      return;
+    }
+
     try {
-      const token = localStorage.getItem("accessToken");
-      if (!token) {
-        setError("You must be logged in to delete a goal.");
-        return;
-      }
       await axios.delete(`https://beimnettadesse.pythonanywhere.com/api/core/goals/${id}/`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       fetchData();
       showToast("Saving goal deleted successfully.");
     } catch (err) {
-      console.error("Error deleting goal", err);
-      setError("Failed to delete the saving goal. Please try again.");
+      const error = err as AxiosError<{ detail?: string; message?: string }>;
+      const errorMessage =
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        error.message;
+
+      if (error.response?.status === 401 && errorMessage.includes("token")) {
+        console.log("Attempting to refresh token for delete...");
+        const newToken = await refreshToken();
+        if (newToken) {
+          try {
+            await axios.delete(`https://beimnettadesse.pythonanywhere.com/api/core/goals/${id}/`, {
+              headers: { Authorization: `Bearer ${newToken}` },
+            });
+            fetchData();
+            showToast("Saving goal deleted successfully.");
+          } catch (retryErr) {
+            const retryError = retryErr as AxiosError<{ detail?: string; message?: string }>;
+            const retryMessage =
+              retryError.response?.data?.detail ||
+              retryError.response?.data?.message ||
+              retryError.message;
+            setError(`Failed to delete the saving goal: ${retryMessage}`);
+          }
+        } else {
+          setError("Failed to refresh token. Please log in again.");
+        }
+      } else {
+        setError(`Failed to delete the saving goal: ${errorMessage}`);
+      }
     }
   };
 
@@ -153,12 +244,14 @@ export default function SavingGoals() {
       setError("You must be logged in.");
       return;
     }
+
     const targetAmountNumber = parseFloat(formData.target_amount);
     const currentAmountNumber = parseFloat(formData.current_amount);
     if (isNaN(targetAmountNumber) || targetAmountNumber <= 0 || isNaN(currentAmountNumber) || currentAmountNumber < 0) {
       setError("Amounts must be positive numbers.");
       return;
     }
+
     const payload = {
       title: formData.title,
       target_amount: targetAmountNumber,
@@ -166,6 +259,7 @@ export default function SavingGoals() {
       deadline: formData.deadline,
       description: formData.description,
     };
+
     try {
       setError(null);
       if (editingGoal) {
@@ -185,8 +279,47 @@ export default function SavingGoals() {
       fetchData();
       showToast("Saving goal saved successfully.");
     } catch (err) {
-      console.error("Error saving goal", err);
-      setError("Failed to save the saving goal. Please try again.");
+      const error = err as AxiosError<{ detail?: string; message?: string }>;
+      const errorMessage =
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        error.message;
+
+      if (error.response?.status === 401 && errorMessage.includes("token")) {
+        console.log("Attempting to refresh token for save...");
+        const newToken = await refreshToken();
+        if (newToken) {
+          try {
+            if (editingGoal) {
+              await axios.put(
+                `https://beimnettadesse.pythonanywhere.com/api/core/goals/${editingGoal.id}/`,
+                payload,
+                { headers: { Authorization: `Bearer ${newToken}` } }
+              );
+            } else {
+              await axios.post(
+                `https://beimnettadesse.pythonanywhere.com/api/core/goals/`,
+                payload,
+                { headers: { Authorization: `Bearer ${newToken}` } }
+              );
+            }
+            setModalOpen(false);
+            fetchData();
+            showToast("Saving goal saved successfully.");
+          } catch (retryErr) {
+            const retryError = retryErr as AxiosError<{ detail?: string; message?: string }>;
+            const retryMessage =
+              retryError.response?.data?.detail ||
+              retryError.response?.data?.message ||
+              retryError.message;
+            setError(`Failed to save the saving goal: ${retryMessage}`);
+          }
+        } else {
+          setError("Failed to refresh token. Please log in again.");
+        }
+      } else {
+        setError(`Failed to save the saving goal: ${errorMessage}`);
+      }
     }
   };
 
@@ -204,16 +337,19 @@ export default function SavingGoals() {
       setError("You must be logged in.");
       return;
     }
+
     const amount = parseFloat(amountToAdd);
     if (isNaN(amount) || amount <= 0) {
       setError("Amount must be a positive number.");
       return;
     }
+
     const newCurrentAmount = goalToFund.current_amount + amount;
     const payload = {
       ...goalToFund,
       current_amount: newCurrentAmount,
     };
+
     try {
       setError(null);
       await axios.put(
@@ -225,14 +361,44 @@ export default function SavingGoals() {
       fetchData();
       showToast(`$${amount.toFixed(2)} added to ${goalToFund.title}.`);
     } catch (err) {
-      console.error("Error adding money", err);
-      setError("Failed to add money. Please try again.");
+      const error = err as AxiosError<{ detail?: string; message?: string }>;
+      const errorMessage =
+        error.response?.data?.detail ||
+        error.response?.data?.message ||
+        error.message;
+
+      if (error.response?.status === 401 && errorMessage.includes("token")) {
+        console.log("Attempting to refresh token for add money...");
+        const newToken = await refreshToken();
+        if (newToken) {
+          try {
+            await axios.put(
+              `https://beimnettadesse.pythonanywhere.com/api/core/goals/${goalToFund.id}/`,
+              payload,
+              { headers: { Authorization: `Bearer ${newToken}` } }
+            );
+            setAddMoneyModalOpen(false);
+            fetchData();
+            showToast(`$${amount.toFixed(2)} added to ${goalToFund.title}.`);
+          } catch (retryErr) {
+            const retryError = retryErr as AxiosError<{ detail?: string; message?: string }>;
+            const retryMessage =
+              retryError.response?.data?.detail ||
+              retryError.response?.data?.message ||
+              retryError.message;
+            setError(`Failed to add money: ${retryMessage}`);
+          }
+        } else {
+          setError("Failed to refresh token. Please log in again.");
+        }
+      } else {
+        setError(`Failed to add money: ${errorMessage}`);
+      }
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-100 font-sans p-4 sm:p-8">
-      {/* Toast Notification */}
       {isToastVisible && (
         <div className="fixed bottom-4 right-4 z-50 p-4 rounded-md shadow-lg bg-green-500 text-white">
           {toastMessage}
@@ -253,7 +419,6 @@ export default function SavingGoals() {
           </button>
         </div>
 
-        {/* Summary Cards */}
         <div className="grid gap-6 md:grid-cols-4">
           <div className="rounded-xl border border-gray-200 bg-white shadow-lg p-6 flex flex-col justify-between" style={{ minHeight: "140px" }}>
             <div className="flex items-center justify-between">
@@ -291,7 +456,6 @@ export default function SavingGoals() {
           </div>
         </div>
 
-        {/* Overall Progress Section */}
         <div className="rounded-xl border border-gray-200 bg-white text-card-foreground shadow-md p-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
             <div>
@@ -309,7 +473,6 @@ export default function SavingGoals() {
           </div>
         </div>
 
-        {/* Goals List */}
         <div className="rounded-xl border border-gray-200 bg-white text-card-foreground shadow-md p-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
             <h2 className="text-xl font-bold tracking-tight text-purple-700">All Saving Goals</h2>
@@ -361,8 +524,8 @@ export default function SavingGoals() {
                     </div>
 
                     <div className="flex justify-between text-xs text-gray-600 mt-2">
-                        <div className="font-semibold text-green-600">${Number(goal.current_amount).toFixed(2)}</div>
-                        <div className="font-semibold text-purple-700">${Number(goal.target_amount).toFixed(2)}</div>
+                      <div className="font-semibold text-green-600">${Number(goal.current_amount).toFixed(2)}</div>
+                      <div className="font-semibold text-purple-700">${Number(goal.target_amount).toFixed(2)}</div>
                     </div>
                     
                     <div className="mt-4">
@@ -373,20 +536,20 @@ export default function SavingGoals() {
                         </div>
                       )}
                       {!isOverdue && progress < 100 && (
-                          <div className="flex items-center text-purple-700 font-semibold text-sm mb-2">
-                            <span>${(goal.target_amount - goal.current_amount).toFixed(2)} to go</span>
-                          </div>
+                        <div className="flex items-center text-purple-700 font-semibold text-sm mb-2">
+                          <span>${(goal.target_amount - goal.current_amount).toFixed(2)} to go</span>
+                        </div>
                       )}
                       {progress >= 100 && (
-                          <div className="flex items-center text-green-600 font-semibold text-sm mb-2">
-                            <Check size={16} className="mr-1" />
-                            <span>Goal Achieved!</span>
-                          </div>
+                        <div className="flex items-center text-green-600 font-semibold text-sm mb-2">
+                          <Check size={16} className="mr-1" />
+                          <span>Goal Achieved!</span>
+                        </div>
                       )}
 
                       <button
                         onClick={() => openAddMoneyModal(goal)}
-                        className="w-full px-4 py-2 mt-2 rounded-md text-purple-700 bg-purple-100  transition text-sm font-semibold"
+                        className="w-full px-4 py-2 mt-2 rounded-md text-purple-700 bg-purple-100 transition text-sm font-semibold"
                       >
                         Add Money
                       </button>
@@ -399,12 +562,11 @@ export default function SavingGoals() {
         </div>
       </div>
 
-      {/* Main Modal for adding/editing a goal */}
       {modalOpen && (
-    <div
-    className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-    onClick={() => setModalOpen(false)}
-  >
+        <div
+          className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => setModalOpen(false)}
+        >
           <div
             className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md"
             onClick={(e) => e.stopPropagation()}
@@ -507,7 +669,6 @@ export default function SavingGoals() {
         </div>
       )}
 
-      {/* Add Money Modal */}
       {addMoneyModalOpen && goalToFund && (
         <div
           className="fixed inset-0 bg-gray-100 bg-opacity-40 flex items-center justify-center z-50 p-4"
