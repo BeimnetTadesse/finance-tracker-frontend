@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import axios, { AxiosError } from "axios";
 import { Plus, Pencil, Trash, CreditCard, PiggyBank, Scale } from "lucide-react";
 
@@ -53,7 +53,7 @@ export default function Budgets() {
   });
 
   // Refresh token function
-  const refreshToken = async (): Promise<string | null> => {
+  const refreshToken = useCallback(async (): Promise<string | null> => {
     const refreshToken = localStorage.getItem("refreshToken");
     if (!refreshToken) {
       setError("No refresh token available. Please log in again.");
@@ -61,7 +61,7 @@ export default function Budgets() {
     }
 
     try {
-      const response = await axios.post("https://beimnettadesse.pythonanywhere.com/api/token/refresh/", {
+      const response = await axios.post("https://beimnettadesse.pythonanywhere.com/api/accounts/token/refresh/", {
         refresh: refreshToken,
       });
       const newAccessToken = response.data.access;
@@ -79,14 +79,14 @@ export default function Budgets() {
       localStorage.removeItem("refreshToken");
       return null;
     }
-  };
+  }, []);
 
   // Fetch all data with token refresh handling
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
 
-    let token = localStorage.getItem("accessToken");
+    const token = localStorage.getItem("accessToken");
     if (!token) {
       setError("You must be logged in to view budgets.");
       setBudgets([]);
@@ -116,7 +116,7 @@ export default function Budgets() {
       // Convert budget.amount to number
       const parsedBudgets = budgetsRes.data.map((budget) => ({
         ...budget,
-        amount: Number(budget.amount), // Convert string to number
+        amount: Number(budget.amount),
       }));
 
       setCategories(categoriesRes.data);
@@ -137,7 +137,7 @@ export default function Budgets() {
         error.response?.data?.message ||
         error.message;
 
-      if (error.response?.status === 401 && errorMessage.includes("token not valid")) {
+      if (error.response?.status === 401 && errorMessage.includes("token")) {
         console.log("Attempting to refresh token...");
         const newToken = await refreshToken();
         if (newToken) {
@@ -203,11 +203,11 @@ export default function Budgets() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [refreshToken]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const getCategoryName = (categoryId: number): string => {
     const cat = categories.find((c) => c.id === categoryId);
@@ -253,7 +253,7 @@ export default function Budgets() {
 
   const deleteBudget = async (id: number) => {
     if (!window.confirm("Are you sure you want to delete this budget?")) return;
-    let token = localStorage.getItem("accessToken");
+    const token = localStorage.getItem("accessToken");
     if (!token) {
       setError("You must be logged in to delete a budget.");
       return;
@@ -272,7 +272,7 @@ export default function Budgets() {
         error.response?.data?.message ||
         error.message;
 
-      if (error.response?.status === 401 && errorMessage.includes("token not valid")) {
+      if (error.response?.status === 401 && errorMessage.includes("token")) {
         console.log("Attempting to refresh token for delete...");
         const newToken = await refreshToken();
         if (newToken) {
@@ -362,7 +362,7 @@ export default function Budgets() {
       amount: amountNumber,
     };
 
-    let token = localStorage.getItem("accessToken");
+    const token = localStorage.getItem("accessToken");
     if (!token) {
       setError("You must be logged in.");
       return;
@@ -394,7 +394,7 @@ export default function Budgets() {
         error.response?.data?.message ||
         error.message;
 
-      if (error.response?.status === 401 && errorMessage.includes("token not valid")) {
+      if (error.response?.status === 401 && errorMessage.includes("token")) {
         console.log("Attempting to refresh token for save...");
         const newToken = await refreshToken();
         if (newToken) {
@@ -612,10 +612,10 @@ export default function Budgets() {
       </div>
 
       {modalOpen && (
-       <div
-       className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-       onClick={() => setModalOpen(false)}
-     >
+        <div
+          className="fixed inset-0 bg-white/10 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onClick={() => setModalOpen(false)}
+        >
           <div
             className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md max-h-full overflow-auto"
             onClick={(e) => e.stopPropagation()}
